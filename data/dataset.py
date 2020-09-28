@@ -5,6 +5,7 @@ import xml.etree.ElementTree as ET
 
 import cv2
 import numpy as np
+from numpy.lib.type_check import imag
 import torch
 import torch.nn.functional as F
 import torch.utils.data
@@ -114,22 +115,11 @@ class VOCDataset(torch.utils.data.Dataset):
             boxes = boxes[is_difficult == 0]
             labels = labels[is_difficult == 0]
         image = self._read_image(image_id)
-        if self.transform:
-            image, boxes, labels = self.transform(image, boxes, labels)
-        target = np.zeros((len(boxes), 6))
-        for i, (box, label) in enumerate(zip(boxes, labels)):
-            target[i, 0] = 0
-            target[i, 1] = label / 1.
-            w = box[2] - box[0]
-            h = box[3] - box[1]
-            target[i, 2] = (box[0] + box[2]) / 2
-            target[i, 3] = (box[1] + box[3]) / 2
-            target[i, 4] = w
-            target[i, 5] = h
-        target = torch.from_numpy(target)
-        if self.rtn_path:
-            return image_id, image
-        return image, target
+        w, h = image.size()
+        boxes[:, 0::2] = np.clip(boxes[:, 0::2] / w, 0.001, 0.999)
+        boxes[:, 1::2] = np.clip(boxes[:, 1::2] / h, 0.001, 0.999)
+        image = cv2.resize(image, (416, 416))
+        return ToTensor(image), boxes, labels, len(boxes)
 
     def get_annotation(self, index):
         image_id = self.ids[index]
