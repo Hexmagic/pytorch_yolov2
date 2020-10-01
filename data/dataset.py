@@ -115,7 +115,7 @@ class VOCDataset(torch.utils.data.Dataset):
             boxes = boxes[is_difficult == 0]
             labels = labels[is_difficult == 0]
         image = self._read_image(image_id)
-        w, h = image.size()
+        w, h = image.size
         boxes[:, 0::2] = np.clip(boxes[:, 0::2] / w, 0.001, 0.999)
         boxes[:, 1::2] = np.clip(boxes[:, 1::2] / h, 0.001, 0.999)
         image = cv2.resize(image, (416, 416))
