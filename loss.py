@@ -197,7 +197,7 @@ class Loss(nn.Module):
             class_target.view(bsize, -1, 1).long(), \
             class_mask.view(bsize, -1, 1)
 
-    def yolo_loss(self, output, target):
+    def cal_loss(self, output, target):
         """
         Build yolo loss
 

@@ -1,7 +1,3 @@
-# -*- coding: utf-8 -*-
-# @Author  : LG
-# 使用了与torchvision中VGG相同的搭建方式.
-
 from torch import nn
 import os
 import torch
