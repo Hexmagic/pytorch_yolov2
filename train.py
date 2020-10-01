@@ -6,7 +6,7 @@ from torch.autograd import Variable
 from data.dataset import VOCDataset
 from yolov2 import YOLOv2
 def main():
-    if torch.cuda.is_avaliable():
+    if torch.cuda.is_available():
         device = torch.device('cuda')
     else:
         device = torch.device('cpu')
