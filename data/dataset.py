@@ -120,6 +120,7 @@ class VOCDataset(torch.utils.data.Dataset):
         boxes[:, 0::2] = np.clip(boxes[:, 0::2] / w, 0.001, 0.999)
         boxes[:, 1::2] = np.clip(boxes[:, 1::2] / h, 0.001, 0.999)
         image =cv2.resize(image,(416, 416))
+        print(boxes,labels)
         return ToTensor()(image), boxes, labels, len(boxes)
 
     def get_annotation(self, index):
@@ -182,6 +183,7 @@ class VOCDataset(torch.utils.data.Dataset):
         lst[3] = lst[3].replace('.xml', '.jpg')
         image_file = VOCDataset.sep.join(lst)
         image = Image.open(image_file).convert("RGB")
+        print(image)
         image = np.array(image)
         return image
 
