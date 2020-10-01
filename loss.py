@@ -6,8 +6,7 @@ from __future__ import division
 from __future__ import print_function
 
 import torch
-from config import config as cfg
-from util.bbox import generate_all_anchors, xywh2xxyy, box_transform_inv, box_ious, xxyy2xywh, box_transform
+from bbox import generate_all_anchors, xywh2xxyy, box_transform_inv, box_ious, xxyy2xywh, box_transform
 import torch.nn.functional as F
 
 
@@ -80,7 +79,7 @@ class Loss(nn.Module):
         # what tensor is used doesn't matter
         iou_target = delta_pred_batch.new_zeros((bsize, H * W, num_anchors, 1))
         iou_mask = delta_pred_batch.new_ones(
-            (bsize, H * W, num_anchors, 1)) * cfg.noobject_scale
+            (bsize, H * W, num_anchors, 1)) * 1
 
         box_target = delta_pred_batch.new_zeros((bsize, H * W, num_anchors, 4))
         box_mask = delta_pred_batch.new_zeros((bsize, H * W, num_anchors, 1))
@@ -91,7 +90,7 @@ class Loss(nn.Module):
 
         # get all the anchors
 
-        anchors = torch.FloatTensor(cfg.anchors)
+        anchors = torch.FloatTensor(5)
 
         # note: the all anchors' xywh scale is normalized by the grid width and height, i.e. 13 x 13
         # this is very crucial because the predict output is normalized to 0~1, which is also
@@ -103,9 +102,6 @@ class Loss(nn.Module):
             all_grid_xywh)
         all_anchors_xywh = all_grid_xywh.clone()
         all_anchors_xywh[:, 0:2] += 0.5
-        if cfg.debug:
-            print('all grid: ', all_grid_xywh[:12, :])
-            print('all anchor: ', all_anchors_xywh[:12, :])
         all_anchors_xxyy = xywh2xxyy(all_anchors_xywh)
 
         # process over batches
@@ -132,17 +128,16 @@ class Loss(nn.Module):
             ious = ious.view(-1, num_anchors, num_obj)
             max_iou, _ = torch.max(
                 ious, dim=-1, keepdim=True)  # shape: (H * W, num_anchors, 1)
-            if cfg.debug:
-                print('ious', ious)
+            
 
             # iou_target[b] = max_iou
 
             # we ignore the gradient of predicted boxes whose IoU with any gt box is greater than cfg.threshold
-            iou_thresh_filter = max_iou.view(-1) > cfg.thresh
+            iou_thresh_filter = max_iou.view(-1) > 0.6
             n_pos = torch.nonzero(iou_thresh_filter).numel()
 
             if n_pos > 0:
-                iou_mask[b][max_iou >= cfg.thresh] = 0
+                iou_mask[b][max_iou >=0.6] = 0
 
             # step 2: process box target and class target
             # calculate overlaps between anchors and gt boxes
@@ -171,10 +166,6 @@ class Loss(nn.Module):
                                         argmax_anchor_idx, :].unsqueeze(0)
                 gt_box = gt_box_xywh.unsqueeze(0)
                 target_t = box_transform(assigned_grid, gt_box)
-                if cfg.debug:
-                    print('assigned_grid, ', assigned_grid)
-                    print('gt: ', gt_box)
-                    print('target_t, ', target_t)
                 box_target[b, cell_idx,
                            argmax_anchor_idx, :] = target_t.unsqueeze(0)
                 box_mask[b, cell_idx, argmax_anchor_idx, :] = 1
@@ -186,9 +177,7 @@ class Loss(nn.Module):
                 # update iou target and iou mask
                 iou_target[b, cell_idx, argmax_anchor_idx, :] = max_iou[
                     cell_idx, argmax_anchor_idx, :]
-                if cfg.debug:
-                    print(max_iou[cell_idx, argmax_anchor_idx, :])
-                iou_mask[b, cell_idx, argmax_anchor_idx, :] = cfg.object_scale
+                iou_mask[b, cell_idx, argmax_anchor_idx, :] = 5
 
         return iou_target.view(bsize, -1, 1), \
             iou_mask.view(bsize, -1, 1), \
@@ -246,14 +235,14 @@ class Loss(nn.Module):
         #     print(class_target_keep)
 
         # calculate the loss, normalized by batch size.
-        box_loss = 1 / b * cfg.coord_scale * F.mse_loss(
+        box_loss = 1 / b * 1 * F.mse_loss(
             delta_pred_batch * box_mask,
             box_target * box_mask,
             reduction='sum') / 2.0
         iou_loss = 1 / b * F.mse_loss(conf_pred_batch * iou_mask,
                                       iou_target * iou_mask,
                                       reduction='sum') / 2.0
-        class_loss = 1 / b * cfg.class_scale * F.cross_entropy(
+        class_loss = 1 / b * 1 * F.cross_entropy(
             class_score_batch_keep, class_target_keep, reduction='sum')
 
         return box_loss, iou_loss, class_loss

@@ -143,7 +143,7 @@ class YOLOv2(nn.Module):
     def __init__(self, classes=20) -> None:
         super(YOLOv2, self).__init__()
         self.classes = classes
-        self.darknet = Darknet19(num_classes=1000, pretrained=True)
+        self.darknet = Darknet19(num_classes=1000,pretrained=False)
         self.passthrough = PassThrougLayer()
         '''
         作者在后期的实现中借鉴了ResNet网络，不是直接对高分辨特征图处理，而是增加了一个中间卷积层，先采用64个 $1\times1$ 卷积核进行卷积，然后再进行passthrough处理，这样 $26\times26\times512$的特征图得到 $13\times13\times256$的特征图。这算是实现上的一个小细节。使用Fine-Grained Features之后YOLOv2的性能有1%的提升
