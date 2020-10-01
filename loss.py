@@ -1,9 +1,10 @@
-from torch import nn
-import torch
-import torch.functional as F
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
+from torch import nn
+import torch
+import torch.functional as F
+
 
 import torch
 from bbox import generate_all_anchors, xywh2xxyy, box_transform_inv, box_ious, xxyy2xywh, box_transform
