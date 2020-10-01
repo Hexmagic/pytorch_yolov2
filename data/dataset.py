@@ -109,7 +109,6 @@ class VOCDataset(torch.utils.data.Dataset):
         return image
 
     def __getitem__(self, index):
-        import pdb; pdb.set_trace()
         image_id = self.ids[index]
         boxes, labels, is_difficult = self._get_annotation(image_id)
         if not self.keep_difficult:
@@ -185,21 +184,6 @@ class VOCDataset(torch.utils.data.Dataset):
         image = np.array(image)
         return image
 
-    def collate_fn(self, batch):
-        imgs, targets = list(zip(*batch))
-        targets = [boxes for boxes in targets if boxes is not None]
-        for i, boxes in enumerate(targets):
-            boxes[:, 0] = i
-
-        targets = torch.cat(targets, 0)
-        if self.multi_scale:
-            if self.batch_count % 10 == 0:
-                self.img_size = random.choice(
-                    range(self.min_size, self.max_size + 1, 32))
-            self.batch_count += 1
-        imgs = torch.stack([self.resize(img, self.img_size) for img in imgs])
-
-        return imgs, targets
 
 
 if __name__ == '__main__':
