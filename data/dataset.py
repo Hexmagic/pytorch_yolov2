@@ -190,8 +190,7 @@ if __name__ == '__main__':
     from torch.utils.data import DataLoader
     dataset = VOCDataset(data_dir='VOCdevkit', split='train')
     load = DataLoader(dataset,
-                      batch_size=2,
-                      collate_fn=dataset.collate_fn,
+                      batch_size=2,                      
                       shuffle=True)
     i = 0
     for ele in load:
