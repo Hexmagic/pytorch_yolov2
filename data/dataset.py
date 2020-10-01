@@ -110,6 +110,7 @@ class VOCDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         image_id = self.ids[index]
+        print(image_id)
         boxes, labels, is_difficult = self._get_annotation(image_id)
         if not self.keep_difficult:
             boxes = boxes[is_difficult == 0]
