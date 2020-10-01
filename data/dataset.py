@@ -84,7 +84,7 @@ class VOCDataset(torch.utils.data.Dataset):
         if split != 'test':
             image_sets_file = [
                 os.path.join(self.data_dir, f'VOC{year}', "ImageSets", "Main",
-                             "%s.txt" % self.split) for year in [2007, 2012]
+                             "%s.txt" % self.split) for year in [2007]
             ]
             self.ids = VOCDataset._read_image_ids(image_sets_file)
         else:
