@@ -27,3 +27,5 @@ def main():
             img = Variable(img).to(device)
             ouput = model(img)
             import pdb; pdb.set_trace()
+if __name__=='__main__':
+    main()
