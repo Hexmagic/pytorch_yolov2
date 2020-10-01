@@ -18,6 +18,7 @@ def main():
         shuffle=True,
         num_workers=8        
     )
+    dataset[0]
     torch.backends.cuda.enabled=True
     torch.backends.cuda.benchmark=True
     model = YOLOv2().to(device)
