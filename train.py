@@ -26,7 +26,7 @@ def main():
     opt = SGD(model.parameters(),lr=1e-4,momentum=0.9,weight_decay=5e-4)
     for epoch in range(160):
         for batch in dataloader:
-            img,boxes,label,num_obj = batch
+            img,boxes,label = batch
             img = Variable(img).to(device)
             ouput = model(img)
             target = (boxes,label,num_obj)

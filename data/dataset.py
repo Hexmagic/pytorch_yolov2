@@ -121,7 +121,7 @@ class VOCDataset(torch.utils.data.Dataset):
         boxes[:, 1::2] = np.clip(boxes[:, 1::2] / h, 0.001, 0.999)
         image =cv2.resize(image,(416, 416))
         print(image,boxes,labels,len(boxes))
-        return ToTensor()(image), boxes, labels, len(boxes)
+        return ToTensor()(image), boxes, labels#, len(boxes)
 
     def get_annotation(self, index):
         image_id = self.ids[index]
