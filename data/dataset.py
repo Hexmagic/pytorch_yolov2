@@ -188,7 +188,7 @@ class VOCDataset(torch.utils.data.Dataset):
 
 if __name__ == '__main__':
     from torch.utils.data import DataLoader
-    dataset = VOCDataset(data_dir='datasets', split='train')
+    dataset = VOCDataset(data_dir='VOCdevkit', split='train')
     load = DataLoader(dataset,
                       batch_size=2,
                       collate_fn=dataset.collate_fn,
