@@ -62,13 +62,13 @@ class VOCDataset(torch.utils.data.Dataset):
         self.multi_scale = multi_scale
         if split == 'train':
             transform = [
-                ConvertFromInts(),
-                PhotometricDistort(),
-                Expand([123, 117, 104]),
-                RandomSampleCrop(),
-                RandomMirror(),
+                #ConvertFromInts(),
+                #PhotometricDistort(),
+                #Expand([123, 117, 104]),
+                #RandomSampleCrop(),
+                #RandomMirror(),
                 ToPercentCoords(),
-                Resize(img_size),
+                #Resize(img_size),
                 SubtractMeans([123, 117, 104]),
                 ToTensor(),
             ]
