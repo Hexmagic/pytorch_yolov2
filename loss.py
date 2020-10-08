@@ -14,6 +14,8 @@ import torch.nn.functional as F
 class Loss(nn.Module):
     def __init__(self) -> None:
         super(Loss, self).__init__()
+        self.anchors = [[1.3221, 1.73145], [3.19275, 4.00944], [
+            5.05587, 8.09892], [9.47112, 4.84053], [11.2364, 10.0071]]
 
     def forward(self, output, target):
         B, C, H, W = output.size()
@@ -91,7 +93,7 @@ class Loss(nn.Module):
 
         # get all the anchors
 
-        anchors = torch.FloatTensor(5)
+        anchors = torch.FloatTensor(self.anchors)
 
         # note: the all anchors' xywh scale is normalized by the grid width and height, i.e. 13 x 13
         # this is very crucial because the predict output is normalized to 0~1, which is also
@@ -129,7 +131,6 @@ class Loss(nn.Module):
             ious = ious.view(-1, num_anchors, num_obj)
             max_iou, _ = torch.max(
                 ious, dim=-1, keepdim=True)  # shape: (H * W, num_anchors, 1)
-            
 
             # iou_target[b] = max_iou
 
@@ -138,7 +139,7 @@ class Loss(nn.Module):
             n_pos = torch.nonzero(iou_thresh_filter).numel()
 
             if n_pos > 0:
-                iou_mask[b][max_iou >=0.6] = 0
+                iou_mask[b][max_iou >= 0.6] = 0
 
             # step 2: process box target and class target
             # calculate overlaps between anchors and gt boxes

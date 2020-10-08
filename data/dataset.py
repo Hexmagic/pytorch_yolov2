@@ -13,6 +13,7 @@ from PIL import Image
 from torch.nn import functional as F
 from torch.utils.data import Dataset
 from sys import platform
+from torchvision import transforms
 from data.transforms import (ConvertFromInts, Expand, PhotometricDistort,
                              RandomMirror, RandomSampleCrop, Resize,
                              SubtractMeans, ToPercentCoords, ToTensor, Compose)
@@ -53,10 +54,10 @@ class VOCDataset(torch.utils.data.Dataset):
                  multi_scale=False,
                  keep_difficult=False):
         """Dataset for VOC data.
-		Args:
-			data_dir: the root of the VOC2007 or VOC2012 dataset, the directory contains the following sub-directories:
-				Annotations, ImageSets, JPEGImages, SegmentationClass, SegmentationObject.
-		"""
+                Args:
+                        data_dir: the root of the VOC2007 or VOC2012 dataset, the directory contains the following sub-directories:
+                                Annotations, ImageSets, JPEGImages, SegmentationClass, SegmentationObject.
+                """
         self.rtn_path = rtn_path
         self.multi_scale = multi_scale
         if split == 'train':
@@ -74,7 +75,7 @@ class VOCDataset(torch.utils.data.Dataset):
         else:
             transform = [
                 Resize(img_size),
-                #ToPercentCoords(),
+                # ToPercentCoords(),
                 SubtractMeans([123, 117, 104]),
                 ToTensor()
             ]
@@ -110,18 +111,16 @@ class VOCDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         image_id = self.ids[index]
-        print(image_id)
         boxes, labels, is_difficult = self._get_annotation(image_id)
         if not self.keep_difficult:
             boxes = boxes[is_difficult == 0]
             labels = labels[is_difficult == 0]
         image = self._read_image(image_id)
-        h,w,c = image.shape
+        h, w, c = image.shape
         boxes[:, 0::2] = np.clip(boxes[:, 0::2] / w, 0.001, 0.999)
         boxes[:, 1::2] = np.clip(boxes[:, 1::2] / h, 0.001, 0.999)
-        image =cv2.resize(image,(416, 416))
-        print(image,boxes,labels,len(boxes))
-        return ToTensor()(image), boxes, labels#, len(boxes)
+        image = cv2.resize(image, (416, 416))
+        return transforms.ToTensor()(image), torch.from_numpy(boxes), torch.from_numpy(labels) , torch.Tensor([len(boxes)]).long()
 
     def get_annotation(self, index):
         image_id = self.ids[index]
@@ -183,17 +182,53 @@ class VOCDataset(torch.utils.data.Dataset):
         lst[3] = lst[3].replace('.xml', '.jpg')
         image_file = VOCDataset.sep.join(lst)
         image = Image.open(image_file).convert("RGB")
-        print(image)
         image = np.array(image)
         return image
 
+
+def detection_collate(batch):
+    """
+    Collate data of different batch, it is because the boxes and gt_classes have changeable length.
+    This function will pad the boxes and gt_classes with zero.
+
+    Arguments:
+    batch -- list of tuple (im, boxes, gt_classes)
+
+    im_data -- tensor of shape (3, H, W)
+    boxes -- tensor of shape (N, 4)
+    gt_classes -- tensor of shape (N)
+    num_obj -- tensor of shape (1)
+
+    Returns:
+
+    tuple
+    1) tensor of shape (batch_size, 3, H, W)
+    2) tensor of shape (batch_size, N, 4)
+    3) tensor of shape (batch_size, N)
+    4) tensor of shape (batch_size, 1)
+
+    """
+
+    # kind of hack, this will break down a list of tuple into
+    # individual list
+    bsize = len(batch)
+    im_data, boxes, gt_classes, num_obj = zip(*batch)
+    max_num_obj = max([x.item() for x in num_obj])
+    padded_boxes = torch.zeros((bsize, max_num_obj, 4))
+    padded_classes = torch.zeros((bsize, max_num_obj,))
+
+    for i in range(bsize):
+        padded_boxes[i, :num_obj[i].item(), :] = boxes[i]
+        padded_classes[i, :num_obj[i].item()] = gt_classes[i]
+
+    return torch.stack(im_data, 0), padded_boxes, padded_classes, torch.stack(num_obj, 0)
 
 
 if __name__ == '__main__':
     from torch.utils.data import DataLoader
     dataset = VOCDataset(data_dir='VOCdevkit', split='train')
     load = DataLoader(dataset,
-                      batch_size=2,                      
+                      batch_size=2,
                       shuffle=True)
     i = 0
     for ele in load:
