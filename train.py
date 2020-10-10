@@ -3,9 +3,9 @@ import torch
 from torch.optim import SGD
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
-from mydata.dataset import VOCDataset, detection_collate
-#from loss import Loss
-from yolov2 import Yolov2
+from dataset.dataset import VOCDataset, detection_collate
+from model.loss import Loss
+from model.yolov2 import YOLOv2
 from argparse import ArgumentParser
 
 
@@ -35,8 +35,8 @@ def main():
     dataset[0]
     torch.backends.cuda.enabled = True
     torch.backends.cuda.benchmark = True
-    model = Yolov2(weights_file='darknet19_448.weights').to(device)
-    #criterion = Loss().cuda()
+    model = YOLOv2().to(device)
+    criterion = Loss().cuda()
     lr = 1e-4
     opt = SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
     for epoch in range(160):
@@ -50,7 +50,9 @@ def main():
             img, boxes, label, num_obj = batch
             img = Variable(img).to(device)
             boxes = Variable(boxes).to(device)
-            box_loss, iou_loss, class_loss = model(img, boxes, label, num_obj,training=True)
+            output = model(img)
+            target = boxes, label, num_obj
+            box_loss, iou_loss, class_loss = criterion(output, target)
             opt.zero_grad()
             loss = box_loss.mean() + iou_loss.mean() \
                 + class_loss.mean()

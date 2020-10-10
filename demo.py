@@ -47,8 +47,8 @@ def parse_args():
     parser = argparse.ArgumentParser('Yolo v2')
     parser.add_argument('--output_dir', dest='output_dir',
                         default='output', type=str)
-    parser.add_argument('--model_name', dest='model_name',
-                        default='yolov2_160.pth', type=str)
+    parser.add_argument('--model',
+                        default='weights/yolov2_160.pth', type=str)
 
     args = parser.parse_args()
     return args
@@ -72,7 +72,7 @@ def demo():
     #state = torch.load('output/yolov2_epoch_160.pth')['model']
     # model.load_state_dict(state)
 
-    model = torch.load('weights/yolov2_40.pth')
+    model = torch.load(args.model)
     print('loaded')
 
     # model_path = os.path.join(args.output_dir, args.model_name + '.pth')
@@ -97,17 +97,18 @@ def demo():
 
         tic = time.time()
 
-        delta_pred, conf_pred, class_pred = model(im_data_variable)
-        #B, C, H, W = output.size()
-        # out = output.permute(0, 2, 3,
-        #                     1).contiguous().view(B, H * W * 5, 5 + 20)
+        #delta_pred, conf_pred, class_pred = model(im_data_variable)
+        output = model(im_data_variable)
+        B, C, H, W = output.size()
+        out = output.permute(0, 2, 3,
+                             1).contiguous().view(B, H * W * 5, 5 + 20)
 
-        #xy_pred = torch.sigmoid(out[:, :, 0:2])
-        #conf_pred = torch.sigmoid(out[:, :, 4:5])
-        #hw_pred = torch.exp(out[:, :, 2:4])
-        #class_score = out[:, :, 5:]
-        #class_pred = F.softmax(class_score, dim=-1)
-        #delta_pred = torch.cat([xy_pred, hw_pred], dim=-1)
+        xy_pred = torch.sigmoid(out[:, :, 0:2])
+        conf_pred = torch.sigmoid(out[:, :, 4:5])
+        hw_pred = torch.exp(out[:, :, 2:4])
+        class_score = out[:, :, 5:]
+        class_pred = F.softmax(class_score, dim=-1)
+        delta_pred = torch.cat([xy_pred, hw_pred], dim=-1)
         yolo_output = [delta_pred, conf_pred, class_pred]
         yolo_output = [item[0].data for item in yolo_output]
         detections = yolo_eval(yolo_output, im_info,

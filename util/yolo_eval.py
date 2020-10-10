@@ -12,7 +12,7 @@ import torch
 from util.bbox import generate_all_anchors, xywh2xxyy, box_transform_inv, xxyy2xywh
 from util.bbox import box_ious
 import time
-import config as cfg
+
 
 
 def yolo_filter_boxes(boxes_pred, conf_pred, classes_pred, confidence_threshold=0.6):
@@ -99,10 +99,11 @@ def generate_prediction_boxes(deltas_pred):
     boxes_pred -- tensor of shape (H * W * num_anchors, 4)  (x1, y1, x2, y2)
     """
 
-    H = int(cfg.test_input_size[0] / cfg.strides)
-    W = int(cfg.test_input_size[1] / cfg.strides)
+    H = int(416 / 32)
+    W = int(416 / 32)
+    anchors = [[1.3221, 1.73145], [3.19275, 4.00944], [5.05587, 8.09892], [9.47112, 4.84053], [11.2364, 10.0071]]
 
-    anchors = torch.FloatTensor(cfg.anchors)
+    anchors = torch.FloatTensor(anchors)
     # shape: (H * W * num_anchors, 4), format: (x, y, w, h)
     all_anchors_xywh = generate_all_anchors(anchors, H, W)
 
@@ -130,11 +131,11 @@ def scale_boxes(boxes, im_info):
     h = im_info['height']
     w = im_info['width']
 
-    input_h, input_w = cfg.test_input_size
+    input_h, input_w = (416,416)
     scale_h, scale_w = input_h / h, input_w / w
 
     # scale the boxes
-    boxes *= cfg.strides
+    boxes *= 32
 
     boxes[:, 0::2] /= scale_w
     boxes[:, 1::2] /= scale_h
@@ -177,13 +178,7 @@ def yolo_eval(yolo_output, im_info, conf_threshold=0.6, nms_threshold=0.4):
 
     boxes = generate_prediction_boxes(deltas)
 
-    if cfg.debug:
-        print('check box: ', boxes.view(13*13, 5, 4).permute(1,
-                                                             0, 2).contiguous().view(-1, 4)[0:10, :])
-        print('check conf: ', conf.view(
-            13*13, 5).permute(1, 0).contiguous().view(-1)[:10])
-
-    # filter boxes on confidence score
+   
     boxes, conf, cls_max_conf, cls_max_id = yolo_filter_boxes(
         boxes, conf, classes, conf_threshold)
 
@@ -194,11 +189,7 @@ def yolo_eval(yolo_output, im_info, conf_threshold=0.6, nms_threshold=0.4):
     # scale boxes
     boxes = scale_boxes(boxes, im_info)
 
-    if cfg.debug:
-        all_boxes = torch.cat([boxes, conf, cls_max_conf, cls_max_id], dim=1)
-        print('check all boxes: ', all_boxes)
-        print('check all boxes len: ', len(all_boxes))
-    #
+  
     # apply nms
     # keep = yolo_nms(boxes, conf.view(-1), nms_threshold)
     # boxes_keep = boxes[keep, :]

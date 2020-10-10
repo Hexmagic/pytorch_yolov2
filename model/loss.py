@@ -30,7 +30,7 @@ class Loss(nn.Module):
         delta_pred = torch.cat([xy_pred, hw_pred], dim=-1)
 
         #
-        output_var = (delta_pred, conf_pred, class_pred)
+        output_var = (delta_pred, conf_pred, class_score)
         output_data = [e.data for e in output_var]
         #gt_boxes,gt_classes,num_boxes = target
         target_var = self.build_target(output_data, target, H, W)
