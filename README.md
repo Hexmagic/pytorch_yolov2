@@ -36,3 +36,4 @@ python train.py --batch_size 16
 ```
 python demo.py --model weights/yolov2_160.pth
 ```
+> 预训练80个epoch的权重下载 链接: https://pan.baidu.com/s/1U4JBuP09eIKF4iGm7ZEpMQ  密码: 3sb6
