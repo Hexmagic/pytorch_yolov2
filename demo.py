@@ -6,7 +6,7 @@ import torch
 from torch.autograd import Variable
 from PIL import Image
 
-from yolov2 import Yolov2
+from model.yolov2 import YOLOv2
 import numpy as np
 from util.visualize import draw_detection_boxes
 import matplotlib.pyplot as plt
