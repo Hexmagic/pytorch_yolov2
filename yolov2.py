@@ -1,179 +1,134 @@
-from torch import nn
-import os
+# --------------------------------------------------------
+# Pytorch Yolov2
+# Licensed under The MIT License [see LICENSE for details]
+# Written by Jingru Tan
+# --------------------------------------------------------
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
+import numpy as np
+
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.autograd import Variable
 
-# 参数配置,标准的darknet19参数.
-cfg = [
-    32, 'M', 64, 'M', 128, 64, 128, 'M', 256, 128, 256, 'M', 512, 256, 512,
-    256, 512, 'M', 1024, 512, 1024, 512, 1024
-]
-
-
-def make_layers(cfg, in_channels=3, batch_norm=True):
-    """
-    从配置参数中构建网络
-    :param cfg:  参数配置
-    :param in_channels: 输入通道数,RGB彩图为3, 灰度图为1
-    :param batch_norm:  是否使用批正则化
-    :return:
-    """
-    layers = []
-    flag = True  # 用于变换卷积核大小,(True选后面的,False选前面的)
-    in_channels = in_channels
-    for v in cfg:
-        if v == 'M':
-            layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
-        else:
-            layers.append(
-                nn.Conv2d(in_channels=in_channels,
-                          out_channels=v,
-                          kernel_size=(1, 3)[flag],
-                          stride=1,
-                          padding=(0, 1)[flag],
-                          bias=False))
-            if batch_norm:
-                layers.append(nn.BatchNorm2d(v))
-            in_channels = v
-
-            layers.append(nn.LeakyReLU(negative_slope=0.1, inplace=True))
-
-        flag = not flag
-
-    return nn.Sequential(*layers)
+import config as cfg
+from darknet import Darknet19
+from darknet import conv_bn_leaky
+from loss import build_target, yolo_loss
 
 
-class Darknet19(nn.Module):
-    """
-    Darknet19 模型
-    """
-    def __init__(self,
-                 num_classes=1000,
-                 in_channels=3,
-                 batch_norm=True,
-                 pretrained=False):
-        """
-        模型结构初始化
-        :param num_classes: 最终分类数       (nums of classification.)
-        :param in_channels: 输入数据的通道数  (input pic`s channel.)
-        :param batch_norm:  是否使用正则化    (use batch_norm, True or False;True by default.)
-        :param pretrained:  是否导入预训练参数 (use the pretrained weight)
-        """
-        super(Darknet19, self).__init__()
-        # 调用nake_layers 方法搭建网络
-        # (build the network)
-        self.features = make_layers(cfg,
-                                    in_channels=in_channels,
-                                    batch_norm=batch_norm)
-        # 网络最后的分类层,使用 [1x1卷积和全局平均池化] 代替全连接层.
-        # (use 1x1 Conv and averagepool replace the full connection layer.)
-        self.classifier = nn.Sequential(
-            nn.Conv2d(1024, num_classes, kernel_size=1, stride=1),
-            nn.AdaptiveAvgPool2d(output_size=(1)), nn.Softmax(dim=0))
-        # 导入预训练模型或初始化
-        if pretrained:
-            self.load_weight()
-        else:
-            self._initialize_weights()
+class ReorgLayer(nn.Module):
+    def __init__(self, stride=2):
+        super(ReorgLayer, self).__init__()
+        self.stride = stride
 
     def forward(self, x):
-        # 前向传播
-        low = self.features[:43](x)
-        x = self.features[43:](low)
-        return low, x
-
-    def _initialize_weights(self):
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight,
-                                        mode='fan_out',
-                                        nonlinearity='relu')
-                if m.bias is not None:
-                    nn.init.constant_(m.bias, 0)
-            elif isinstance(m, nn.BatchNorm2d):
-                nn.init.constant_(m.weight, 1)
-                nn.init.constant_(m.bias, 0)
-
-    def load_weight(self):
-        weight_file = 'weights/darknet19.pth'
-
-        assert len(torch.load(weight_file).keys()) == len(
-            self.state_dict().keys())
-        dic = {}
-        for now_keys, values in zip(self.state_dict().keys(),
-                                    torch.load(weight_file).values()):
-            dic[now_keys] = values
-        self.load_state_dict(dic)
-
-
-class PassThrougLayer(nn.Module):
-    def __init__(self) -> None:
-        super(PassThrougLayer, self).__init__()
-        self.stride = 2
-
-    def forward(self, x):
-        '''
-        将26*26*512，转换为13*13*2048
-        输入(bach,channel,w,h)
-        '''
-        B, C, H, W = x.size()
-        h = H // self.stride
-        w = H // self.stride
-        x = x.view(B, C, h, self.stride, w,
-                   self.stride).transpose(3, 4).contiguous()
-        x = x.view(B, C, h * w,
-                   self.stride * self.stride).transpose(2, 3).contiguous()
-        x = x.view(B, C, self.stride * self.stride, h,
-                   w).transpose(1, 2).contiguous()
-        x = x.view(B, self.stride * self.stride * C, h, w)
+        B, C, H, W = x.data.size()
+        ws = self.stride
+        hs = self.stride
+        x = x.view(B, C, int(H / hs), hs, int(W / ws),
+                   ws).transpose(3, 4).contiguous()
+        x = x.view(B, C, int(H / hs * W / ws), hs *
+                   ws).transpose(2, 3).contiguous()
+        x = x.view(B, C, hs * ws, int(H / hs), int(W / ws)
+                   ).transpose(1, 2).contiguous()
+        x = x.view(B, hs * ws * C, int(H / hs), int(W / ws))
         return x
 
 
-class LeakyConv(nn.Module):
-    def __init__(self, ic, oc, k, s=1, p=0) -> None:
-        super(LeakyConv,self).__init__()
-        self.block = nn.Sequential(
-            nn.Conv2d(ic, oc, kernel_size=k, padding=p, stride=s),
-            nn.BatchNorm2d(oc), nn.LeakyReLU())
+class Yolov2(nn.Module):
 
-    def forward(self, x):
-        return self.block(x)
+    num_classes = 20
+    num_anchors = 5
 
+    def __init__(self, classes=None, weights_file=False):
+        super(Yolov2, self).__init__()
+        if classes:
+            self.num_classes = classes
 
-class YOLOv2(nn.Module):
-    def __init__(self, classes=20) -> None:
-        super(YOLOv2, self).__init__()
-        self.classes = classes
-        self.darknet = Darknet19(num_classes=1000,pretrained=False)
-        self.passthrough = PassThrougLayer()
-        '''
-        作者在后期的实现中借鉴了ResNet网络，不是直接对高分辨特征图处理，而是增加了一个中间卷积层，先采用64个 $1\times1$ 卷积核进行卷积，然后再进行passthrough处理，这样 $26\times26\times512$的特征图得到 $13\times13\times256$的特征图。这算是实现上的一个小细节。使用Fine-Grained Features之后YOLOv2的性能有1%的提升
-        '''
+        darknet19 = Darknet19()
 
-        self.middle_layer = LeakyConv(512, 64, k=1)
-        self.extra = nn.Sequential(
-            LeakyConv(1024, 1024, k=3, p=1),
-            LeakyConv(1024, 1024, k=3, p=1),
-        )
-        self.transform = nn.Sequential(
-            LeakyConv(1024 + 256, 1024, k=3, p=1),
-            nn.Conv2d(1024, 5 * (self.classes + 5), kernel_size=1))
+        if weights_file:
+            print('load pretrained weight from {}'.format(weights_file))
+            darknet19.load_weights(weights_file)
+            print('pretrained weight loaded!')
 
-    def forward(self, x):
-        low, x = self.darknet(x)
-        low = self.passthrough(self.middle_layer(low))
-        x = self.extra(x)
-        x = torch.cat([low, x],dim=1)
-        x = self.transform(x)
-        return x
+        # darknet backbone
+        self.conv1 = nn.Sequential(darknet19.layer0, darknet19.layer1,
+                                   darknet19.layer2, darknet19.layer3, darknet19.layer4)
+
+        self.conv2 = darknet19.layer5
+
+        # detection layers
+        self.conv3 = nn.Sequential(conv_bn_leaky(1024, 1024, kernel_size=3, return_module=True),
+                                   conv_bn_leaky(1024, 1024, kernel_size=3, return_module=True))
+
+        self.downsampler = conv_bn_leaky(
+            512, 64, kernel_size=1, return_module=True)
+
+        self.conv4 = nn.Sequential(conv_bn_leaky(1280, 1024, kernel_size=3, return_module=True),
+                                   nn.Conv2d(1024, (5 + self.num_classes) * self.num_anchors, kernel_size=1))
+
+        self.reorg = ReorgLayer()
+
+    def forward(self, x, gt_boxes=None, gt_classes=None, num_boxes=None, training=False):
+        """
+        x: Variable
+        gt_boxes, gt_classes, num_boxes: Tensor
+        """
+        x = self.conv1(x)
+        shortcut = self.reorg(self.downsampler(x))
+        x = self.conv2(x)
+        x = self.conv3(x)
+        x = torch.cat([shortcut, x], dim=1)
+        out = self.conv4(x)
+        #return out
+        if cfg.debug:
+            print('check output', out.view(-1)[0:10])
+
+        # out -- tensor of shape (B, num_anchors * (5 + num_classes), H, W)
+        bsize, _, h, w = out.size()
+
+        # 5 + num_class tensor represents (t_x, t_y, t_h, t_w, t_c) and (class1_score, class2_score, ...)
+        # reorganize the output tensor to shape (B, H * W * num_anchors, 5 + num_classes)
+        out = out.permute(0, 2, 3, 1).contiguous().view(
+            bsize, h * w * self.num_anchors, 5 + self.num_classes)
+
+        # activate the output tensor
+        # `sigmoid` for t_x, t_y, t_c; `exp` for t_h, t_w;
+        # `softmax` for (class1_score, class2_score, ...)
+
+        xy_pred = torch.sigmoid(out[:, :, 0:2])
+        conf_pred = torch.sigmoid(out[:, :, 4:5])
+        hw_pred = torch.exp(out[:, :, 2:4])
+        class_score = out[:, :, 5:]
+        class_pred = F.softmax(class_score, dim=-1)
+        delta_pred = torch.cat([xy_pred, hw_pred], dim=-1)
+
+        if training:
+            output_variable = (delta_pred, conf_pred, class_score)
+            output_data = [v.data for v in output_variable]
+            gt_data = (gt_boxes, gt_classes, num_boxes)
+            target_data = build_target(output_data, gt_data, h, w)
+
+            target_variable = [Variable(v) for v in target_data]
+            box_loss, iou_loss, class_loss = yolo_loss(
+                output_variable, target_variable)
+
+            return box_loss, iou_loss, class_loss
+
+        return delta_pred, conf_pred, class_pred
 
 
 if __name__ == '__main__':
-    # 原权重文件为1000分类, 在imagenet上进行预训练,
-    # Pretrained model train on imagenet dataset. 1000 nums of classifical.
-    # top-1 accuracy 76.5% , top-5 accuracy 93.3%.
-
-    net = YOLOv2()
-    print(net)
-    x = torch.zeros((2, 3, 418, 418))
-    out = net(x)
-    print(out.size())
+    model = Yolov2()
+    im = np.random.randn(1, 3, 416, 416)
+    im_variable = Variable(torch.from_numpy(im)).float()
+    out = model(im_variable)
+    delta_pred, conf_pred, class_pred = out
+    print('delta_pred size:', delta_pred.size())
+    print('conf_pred size:', conf_pred.size())
+    print('class_pred size:', class_pred.size())

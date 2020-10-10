@@ -3,9 +3,9 @@ import torch
 from torch.optim import SGD
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
-from data.dataset import VOCDataset, detection_collate
-from loss import Loss
-from yolov2 import YOLOv2
+from mydata.dataset import VOCDataset, detection_collate
+#from loss import Loss
+from yolov2 import Yolov2
 from argparse import ArgumentParser
 
 
@@ -24,7 +24,7 @@ def main():
         torch.backends.cudnn.benchmark = True
     else:
         device = torch.device('cpu')
-    dataset = VOCDataset('VOCdevkit', split='train')
+    dataset = VOCDataset('VOCdevkit', split='trainval')
     dataloader = DataLoader(
         dataset,
         batch_size=arg.batch_size,
@@ -35,8 +35,8 @@ def main():
     dataset[0]
     torch.backends.cuda.enabled = True
     torch.backends.cuda.benchmark = True
-    model = YOLOv2().to(device)
-    criterion = Loss().cuda()
+    model = Yolov2(weights_file='darknet19_448.weights').to(device)
+    #criterion = Loss().cuda()
     lr = 1e-4
     opt = SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
     for epoch in range(160):
@@ -50,15 +50,13 @@ def main():
             img, boxes, label, num_obj = batch
             img = Variable(img).to(device)
             boxes = Variable(boxes).to(device)
-            output = model(img)
-            target = (boxes, label, num_obj)
+            box_loss, iou_loss, class_loss = model(img, boxes, label, num_obj,training=True)
             opt.zero_grad()
-            box_loss, iou_loss, class_loss = criterion(output, target)
             loss = box_loss.mean() + iou_loss.mean() \
                 + class_loss.mean()
-            if i % 50 == 0:
+            if i % 10 == 0:
                 print(
-                    f"batch {epoch} {i}/{len(dataloader)} loss:{round(loss.item(),2)} box: {round(box_loss.mean().item(),3)} iou: {round(iou_loss.mean().item(),3)} class: {round(class_loss.mean().item(),3)}")
+                    f"batch {epoch} {i}/{len(dataloader)} loss:{round(loss.item(),3)} box: {round(box_loss.mean().item(),3)} iou: {round(iou_loss.mean().item(),3)} class: {round(class_loss.mean().item(),3)}")
             loss.backward()
             opt.step()
         if epoch % 5 == 0:

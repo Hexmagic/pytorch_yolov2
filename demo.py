@@ -6,12 +6,13 @@ import torch
 from torch.autograd import Variable
 from PIL import Image
 
-from yolov2 import YOLOv2
+from yolov2 import Yolov2
 import numpy as np
-from visualize import draw_detection_boxes
+from util.visualize import draw_detection_boxes
 import matplotlib.pyplot as plt
-from yolo_eval import yolo_eval
+from util.yolo_eval import yolo_eval
 import torch.nn.functional as F
+
 
 def prepare_im_data(img):
     """
@@ -71,7 +72,7 @@ def demo():
     #state = torch.load('output/yolov2_epoch_160.pth')['model']
     # model.load_state_dict(state)
 
-    model = torch.load('weights/yolov2_155.pth')
+    model = torch.load('weights/yolov2_40.pth')
     print('loaded')
 
     # model_path = os.path.join(args.output_dir, args.model_name + '.pth')
@@ -96,17 +97,17 @@ def demo():
 
         tic = time.time()
 
-        output = model(im_data_variable)
-        B, C, H, W = output.size()
-        out = output.permute(0, 2, 3,
-                             1).contiguous().view(B, H * W * 5, 5 + 20)
+        delta_pred, conf_pred, class_pred = model(im_data_variable)
+        #B, C, H, W = output.size()
+        # out = output.permute(0, 2, 3,
+        #                     1).contiguous().view(B, H * W * 5, 5 + 20)
 
-        xy_pred = torch.sigmoid(out[:, :, 0:2])
-        conf_pred = torch.sigmoid(out[:, :, 4:5])
-        hw_pred = torch.exp(out[:, :, 2:4])
-        class_score = out[:, :, 5:]
-        class_pred = F.softmax(class_score, dim=-1)
-        delta_pred = torch.cat([xy_pred, hw_pred], dim=-1)
+        #xy_pred = torch.sigmoid(out[:, :, 0:2])
+        #conf_pred = torch.sigmoid(out[:, :, 4:5])
+        #hw_pred = torch.exp(out[:, :, 2:4])
+        #class_score = out[:, :, 5:]
+        #class_pred = F.softmax(class_score, dim=-1)
+        #delta_pred = torch.cat([xy_pred, hw_pred], dim=-1)
         yolo_output = [delta_pred, conf_pred, class_pred]
         yolo_output = [item[0].data for item in yolo_output]
         detections = yolo_eval(yolo_output, im_info,
